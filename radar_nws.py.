@@ -1,43 +1,57 @@
 from http.server import BaseHTTPRequestHandler
-import json
-import requests
+import json, requests
 from supabase import create_client
 
-# THE EMPIRE CONFIG
+# 1. EMPIRE COMMAND CENTER CONFIG
 SB_URL = "https://clmuzwbagzcyymfqswbn.supabase.co"
 SB_KEY = "sb_publishable_fFVaZgkLz7v8kQMtSJ1VKg_okCuKxyx"
+DISCORD_URL = "https://discord.com/api/webhooks/1495087078579638459/ugSrDZ6s0coNGKN9G2R94mWosT-uYeuqxh--8CG3xM3Jl2SUK1-NYjXB5bsbasUEgpDk"
+
+# 2. YOUR TELEGRAM ARMAMENT
+TG_TOKEN = "8240729664:AAFwNZyBZRTiX975rfLw63FBEw73frfgxmw"
+TG_CHAT_ID = "808657420" 
+
 supabase = create_client(SB_URL, SB_KEY)
 
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
-        # 1. SCAN THE US SKY
-        headers = {'User-Agent': 'EmpireAI-Pulse-Bot'}
         try:
+            # SCAN THE US FOR HIGH-VALUE TARGETS
+            headers = {'User-Agent': 'EmpireAI-Pulse'}
             response = requests.get('https://api.weather.gov/alerts/active', headers=headers)
             alerts = response.json().get('features', [])
             
-            new_strikes = 0
-            # 2. TARGET THE REVENUE STORMS
-            target_events = ["Tornado Warning", "Severe Thunderstorm Warning", "High Wind Warning"]
+            pings = 0
+            # WE ONLY CARE ABOUT ROOF-DAMAGING EVENTS
+            targets = ["Tornado Warning", "Severe Thunderstorm Warning", "High Wind Warning"]
 
-            for alert in alerts:
-                props = alert['properties']
-                if props['event'] in target_events:
-                    # 3. RECORD THE STRIKE IN THE VAULT
+            for a in alerts:
+                p = a['properties']
+                if p['event'] in targets:
+                    # A. LOCK DATA IN THE VAULT
                     supabase.table("radar_targets").insert({
-                        "user_id": "00000000-0000-0000-0000-000000000000",
-                        "business_name": "PENDING IDENTIFICATION",
-                        "storm_event": props['event'],
-                        "address": props['areaDesc'],
-                        "storm_severity": props['severity']
+                        "storm_event": p['event'],
+                        "address": p['areaDesc'],
+                        "campaign_status": "NEW"
                     }).execute()
-                    new_strikes += 1
+                    
+                    # B. FORMAT THE BROADCAST
+                    msg = f"🚨 **EMPIRE STRIKE**: {p['event']}\n📍 **Location**: {p['areaDesc']}\n[OPEN HUD](https://empire-revenue-pulse.vercel.app)"
+                    
+                    # C. DISCORD BLAST
+                    requests.post(DISCORD_URL, json={"content": msg})
+                    
+                    # D. TELEGRAM BLAST
+                    tg_api = f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage"
+                    requests.post(tg_api, data={"chat_id": TG_CHAT_ID, "text": msg})
+                    
+                    pings += 1
 
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
             self.end_headers()
-            self.wfile.write(json.dumps({"status": "Success", "strikes_found": new_strikes}).encode())
-        
+            self.wfile.write(json.dumps({"status": "Online", "strikes_found": pings}).encode())
+            
         except Exception as e:
             self.send_response(500)
             self.end_headers()
